@@ -1,3 +1,5 @@
+package com.autogenous.filequeue;
+
 /**
  * Created by byeongsukang on 2016. 6. 6..
  */
