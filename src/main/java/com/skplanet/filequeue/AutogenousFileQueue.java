@@ -60,4 +60,7 @@ public class AutogenousFileQueue implements FileQueue {
     public void peek() {
 
     }
+    public void close(){
+
+    }
 }

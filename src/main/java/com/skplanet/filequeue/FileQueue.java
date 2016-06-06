@@ -36,4 +36,10 @@ public interface FileQueue {
      * Retrieves, but does not remove, the head of this queue, or returns null if this queue is empty.
      */
     void peek();
+
+
+    /**
+     * Close
+     */
+    void close();
 }

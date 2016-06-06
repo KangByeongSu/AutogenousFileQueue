@@ -18,6 +18,6 @@ public class PreprocesserTest {
     @Test
     public void testSplitter() {
         int num = pre.findLatestFileNumber(FileQueueProperties.FILE_PATH+FileQueueProperties.PARENT_PATH+FileQueueProperties.CONSUME_LOG_PATH);
-        System.out.println("Num is : " + num);
+        pre.getTail();
     }
 }

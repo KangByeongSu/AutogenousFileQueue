@@ -24,12 +24,12 @@ public class PreprocessFileQueue {
 
     public PreprocessFileQueue() {
         filePath = FileQueueProperties.FILE_PATH;
-        parentPath = FileQueueProperties.PARENT_PATH;
-        dataPath = FileQueueProperties.DATA_PATH;
-        consumeLogPath = FileQueueProperties.CONSUME_LOG_PATH;
-        File parentDirectory = new File(filePath + parentPath);
-        File dataDirectory = new File(filePath + parentPath + dataPath);
-        File consumeLogDirectory = new File(filePath + parentPath + consumeLogPath);
+        parentPath = filePath + FileQueueProperties.PARENT_PATH;
+        dataPath = parentPath + FileQueueProperties.DATA_PATH;
+        consumeLogPath = parentPath + FileQueueProperties.CONSUME_LOG_PATH;
+        File parentDirectory = new File(parentPath);
+        File dataDirectory = new File(dataPath);
+        File consumeLogDirectory = new File(consumeLogPath);
         if (!checkFileIsExist(parentDirectory)) {
             createFile(parentDirectory);
         }
@@ -47,7 +47,7 @@ public class PreprocessFileQueue {
             logger.info("File is exist. Path is : " + file.getAbsolutePath());
             return true;
         } else {
-            logger.info("File is Path is : " + file.getAbsolutePath());
+            logger.info("File is Empty. Path is : " + file.getAbsolutePath());
             return false;
         }
     }
@@ -95,15 +95,35 @@ public class PreprocessFileQueue {
     }
 
     //나중에 InputStream , OutputStream과  RandomAccess속도 비교
-    protected int getTail() {
+    public int getTail() {
 
         try {
-            String latestConsumeLogPath = FileQueueProperties.CONSUME_FILE_NAME + findLatestFileNumber(consumeLogPath) + FileQueueProperties.CONSUME_FILE_SUFFIX;
-            RandomAccessFile raf = new RandomAccessFile(latestConsumeLogPath, "rw");
-            FileChannel fileChannel = raf.getChannel();
-            ByteBuffer buf2 = ByteBuffer.allocate(1024);
+            int num = findLatestFileNumber(consumeLogPath);
+            System.out.println("Tail num : " + num);
+            if (num == 0) {
+                // initial setting. create File and return start position 0.
+                File initialConsumeLogFile = new File(consumeLogPath + File.separator + FileQueueProperties.CONSUME_FILE_NAME + 1 + FileQueueProperties.CONSUME_FILE_SUFFIX);
 
-        //    buf2.clear();
+                initialConsumeLogFile.createNewFile();
+                return 0;
+            }
+
+
+            String latestConsumeLogPath = consumeLogPath + File.separator + FileQueueProperties.CONSUME_FILE_NAME + num + FileQueueProperties.CONSUME_FILE_SUFFIX;
+            System.out.println("path : " + latestConsumeLogPath);
+
+            RandomAccessFile raf = new RandomAccessFile(latestConsumeLogPath, "rw");
+
+            FileChannel fileChannel = raf.getChannel();
+
+            ByteBuffer buf = ByteBuffer.allocate(48);
+
+            int bytesRead = fileChannel.read(buf);
+            System.out.println("dddd : " + bytesRead);
+            //ByteBuffer buf2 = ByteBuffer.allocate(1024);
+
+            //    buf2.clear();
+
 
             //1. 컨슘 로그 파일 연다  OK
             //2. 컨슘 로그의 마지막 라인을 읽는다 ( 고정 크기 / 파일 크기 ) 하면 총 몇개인지 나온다 거기에 고정크기 * 갯수 해서 마지막라인을 읽는다
@@ -111,7 +131,9 @@ public class PreprocessFileQueue {
             //4. 확인되면 컨슘 시작한다
             //5. 확인이 안되면 이전 line으로 간다.
             //6. overwrite or append로 진행
-        }catch(FileNotFoundException e){
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
             e.printStackTrace();
         }
         return 1;
@@ -132,7 +154,7 @@ public class PreprocessFileQueue {
                 files = dir.listFiles();
             }
             if (files.length == 0) {
-                logger.info("Parse Integer Exception. File Format is page-NUM.dat. Please Check your ConsumerLog Directory");
+                logger.info(path + " directory is NULL");
                 return 0;
             }
             for (File file : files) {
@@ -140,7 +162,7 @@ public class PreprocessFileQueue {
                     String name = file.getName();
                     String prefix[] = name.split("\\.");
                     String number[] = prefix[0].split("\\-");
-                    int num = Integer.parseInt(number[1]);
+                    int num = Integer.parseInt(number[1].trim());
                     if (latest < num) {
                         latest = num;
                     }
@@ -161,6 +183,10 @@ public class PreprocessFileQueue {
     }
 
     private void findHeadFile() {
+
+    }
+
+    private void close(){
 
     }
 }
