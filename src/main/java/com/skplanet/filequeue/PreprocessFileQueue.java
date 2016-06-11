@@ -1,5 +1,6 @@
 package com.skplanet.filequeue;
 
+import com.oracle.javafx.jmx.json.JSONDocument;
 import properties.FileQueueProperties;
 
 import java.io.File;
@@ -20,7 +21,6 @@ public class PreprocessFileQueue {
     private String parentPath;
     private String dataPath;
     private String consumeLogPath;
-    private RandomAccessFile raf;
 
     public PreprocessFileQueue() {
         filePath = FileQueueProperties.FILE_PATH;
@@ -67,12 +67,77 @@ public class PreprocessFileQueue {
         //file생성 있으면 읽고 없으면 생성
     }
 
-    private int findLastHeader() {
-        //while돌려서 head나올떄까지..
-        return 1;
+    //한글 읽을때 깨져서 읽는다. 3바이트에 1글자이므로  이거 실제 전송시에는 어떻게 해결할지 고민해봐야한다
+    public long findLastHeader(String path) throws FileNotFoundException, IOException {
+        //try {
+        System.out.println("path : " + path);
+        RandomAccessFile raf = new RandomAccessFile(path, "rw");
+        FileChannel fileChannel = raf.getChannel();
+        ByteBuffer byteBuffer = ByteBuffer.allocate(4);
+        String bytebfferToString = "";
+        long length = raf.length();
+        while (!("head".equals(bytebfferToString))) {//여기서 돌려줘야한다
+            System.out.println("length :" + length);
+            raf.seek(--length);
+            fileChannel.read(byteBuffer);
+            bytebfferToString = new String(byteBuffer.array(), 0, byteBuffer.position());
+            System.out.println("The Byte is : " + bytebfferToString);
+            byteBuffer.clear();
+        }
+        System.out.println("Length is : " + length);
+
+        return length;
+
+        //  System.out.println("read result is " +bytebfferToString);
+//            String stringToInsert = "{This is a string to insert into a file.}";
+//            byte[] answerByteArray = stringToInsert.getBytes();
+//            ByteBuffer byteBuffer = ByteBuffer.wrap(answerByteArray);
+
+//            fileChannel.write(byteBuffer);
+
+//지금 궁금한점.. 올로케이트 갯수만큼만 딱한번 읽나
+
+//            int bytesRead = fileChannel.read(buf);
+//            System.out.println("dddd : " + bytesRead);
+        //ByteBuffer buf2 = ByteBuffer.allocate(1024);
+
+        //    buf2.clear();
+
+
+        //1. 컨슘 로그 파일 연다  OK
+        //2. 컨슘 로그의 마지막 라인을 읽는다 ( 고정 크기 / 파일 크기 ) 하면 총 몇개인지 나온다 거기에 고정크기 * 갯수 해서 마지막라인을 읽는다
+        //3. 해당 라인에 매칭되는 데이터파일에 HEAD식별자가 있는지 확인한다.
+        /*}catch(FileNotFoundException e){
+
+            return 0;
+        }catch(IOException e){
+            return 0;
+        }*/
     }
 
-    private boolean verifyWriter(int endOffset) {
+    public boolean verifyWriter(String dataFilePath, long endOffset) throws FileNotFoundException, IOException {
+        RandomAccessFile raf = new RandomAccessFile(dataFilePath, "rw");
+        FileChannel fileChannel = raf.getChannel();
+        ByteBuffer byteBuffer = ByteBuffer.allocate(16);
+
+        raf.seek(endOffset);
+        fileChannel.read(byteBuffer);
+
+        System.out.println("bbget : " + byteBuffer.get(0));
+        byteBuffer.rewind();
+        //head부터 4바이트 =개수 4바이트 =start 4바이트 =end
+        int header = byteBuffer.getInt();
+        int elementCount = byteBuffer.getInt();
+        int startIndex = byteBuffer.getInt();
+        int endIndex = byteBuffer.getInt();
+        System.out.println("end index : "+endIndex);
+
+        byteBuffer.clear();
+        ByteBuffer nbyteBuffer = ByteBuffer.allocate(1);
+        raf.seek(endIndex);
+        fileChannel.read(nbyteBuffer);
+        nbyteBuffer.rewind();
+        System.out.println("end buffer " +nbyteBuffer.get());
         if (true/*file(endoffset)==null || ~~~*/) {
             return true;
         } else {
@@ -80,18 +145,34 @@ public class PreprocessFileQueue {
         }
     }
 
-    protected int getHead() {
+    private String getConsummeLogFilePath(int index) {
+        return consumeLogPath + FileQueueProperties.DATA_FILE_NAME + index + FileQueueProperties.DATA_FILE_SUFFIX;
+    }
 
-        int endOffset = findLastHeader();
-        if (verifyWriter(endOffset)) {
+    private String getDataFilePath(int index) {
+        return dataPath + FileQueueProperties.DATA_FILE_NAME + index + FileQueueProperties.DATA_FILE_SUFFIX;
+    }
 
-        } else {
-            //endOffset부터 overwrite
+    public int getHead() {
+        try {
+            String dataFilePath = getDataFilePath(findLatestFileNumber(dataPath));
+            if (verifyWriter(dataFilePath, findLastHeader(dataFilePath))) {
+
+
+            } else {
+                //endOffset부터 다시 head찾는 verify후  overwrite
+            }
+
+            //1. 데이터 디렉토리의 가장 끝 파일을 읽는다.
+            //2. 마지막 줄을 가져온다  마지막줄의 첫 헤더를 어떻게 가져올까요
+            return 1;
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+            return 0;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return 0;
         }
-
-        //1. 데이터 디렉토리의 가장 끝 파일을 읽는다.
-        //2. 마지막 줄을 가져온다  마지막줄의 첫 헤더를 어떻게 가져올까요
-        return 1;
     }
 
     //나중에 InputStream , OutputStream과  RandomAccess속도 비교
@@ -109,7 +190,7 @@ public class PreprocessFileQueue {
             }
 
 
-            String latestConsumeLogPath = consumeLogPath + File.separator + FileQueueProperties.CONSUME_FILE_NAME + num + FileQueueProperties.CONSUME_FILE_SUFFIX;
+           /* String latestConsumeLogPath = consumeLogPath + File.separator + FileQueueProperties.CONSUME_FILE_NAME + num + FileQueueProperties.CONSUME_FILE_SUFFIX;
             System.out.println("path : " + latestConsumeLogPath);
 
             RandomAccessFile raf = new RandomAccessFile(latestConsumeLogPath, "rw");
@@ -127,7 +208,7 @@ public class PreprocessFileQueue {
 
             //1. 컨슘 로그 파일 연다  OK
             //2. 컨슘 로그의 마지막 라인을 읽는다 ( 고정 크기 / 파일 크기 ) 하면 총 몇개인지 나온다 거기에 고정크기 * 갯수 해서 마지막라인을 읽는다
-            //3. 해당 라인에 매칭되는 데이터파일에 HEAD식별자가 있는지 확인한다.
+            //3. 해당 라인에 매칭되는 데이터파일에 HEAD식별자가 있는지 확인한다.*/
             //4. 확인되면 컨슘 시작한다
             //5. 확인이 안되면 이전 line으로 간다.
             //6. overwrite or append로 진행
@@ -186,7 +267,7 @@ public class PreprocessFileQueue {
 
     }
 
-    private void close(){
+    private void close() {
 
     }
 }
