@@ -1,4 +1,4 @@
-package properties;
+package com.skplanet.properties;
 
 import java.io.File;
 

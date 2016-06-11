@@ -1,7 +1,7 @@
 package com.skplanet.filequeue;
 
-import com.oracle.javafx.jmx.json.JSONDocument;
-import properties.FileQueueProperties;
+import com.skplanet.element.Header;
+import com.skplanet.properties.FileQueueProperties;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.text.ParseException;
 import java.util.logging.Logger;
 
 /**
@@ -68,77 +67,59 @@ public class PreprocessFileQueue {
     }
 
     //한글 읽을때 깨져서 읽는다. 3바이트에 1글자이므로  이거 실제 전송시에는 어떻게 해결할지 고민해봐야한다
-    public long findLastHeader(String path) throws FileNotFoundException, IOException {
-        //try {
-        System.out.println("path : " + path);
+    public long findLatestHeader(String path) throws FileNotFoundException, IOException {
         RandomAccessFile raf = new RandomAccessFile(path, "rw");
         FileChannel fileChannel = raf.getChannel();
         ByteBuffer byteBuffer = ByteBuffer.allocate(4);
-        String bytebfferToString = "";
         long length = raf.length();
-        while (!("head".equals(bytebfferToString))) {//여기서 돌려줘야한다
-            System.out.println("length :" + length);
+        int readData = 0;
+        while (1751474532 != readData) {//여기서 돌려줘야한다
             raf.seek(--length);
             fileChannel.read(byteBuffer);
-            bytebfferToString = new String(byteBuffer.array(), 0, byteBuffer.position());
-            System.out.println("The Byte is : " + bytebfferToString);
+            byteBuffer.rewind();
+            readData = byteBuffer.getInt();
             byteBuffer.clear();
         }
-        System.out.println("Length is : " + length);
-
+        raf.close();
+        fileChannel.close();
         return length;
-
-        //  System.out.println("read result is " +bytebfferToString);
-//            String stringToInsert = "{This is a string to insert into a file.}";
-//            byte[] answerByteArray = stringToInsert.getBytes();
-//            ByteBuffer byteBuffer = ByteBuffer.wrap(answerByteArray);
-
-//            fileChannel.write(byteBuffer);
-
-//지금 궁금한점.. 올로케이트 갯수만큼만 딱한번 읽나
-
-//            int bytesRead = fileChannel.read(buf);
-//            System.out.println("dddd : " + bytesRead);
-        //ByteBuffer buf2 = ByteBuffer.allocate(1024);
-
-        //    buf2.clear();
-
-
-        //1. 컨슘 로그 파일 연다  OK
-        //2. 컨슘 로그의 마지막 라인을 읽는다 ( 고정 크기 / 파일 크기 ) 하면 총 몇개인지 나온다 거기에 고정크기 * 갯수 해서 마지막라인을 읽는다
-        //3. 해당 라인에 매칭되는 데이터파일에 HEAD식별자가 있는지 확인한다.
-        /*}catch(FileNotFoundException e){
-
-            return 0;
-        }catch(IOException e){
-            return 0;
-        }*/
     }
 
-    public boolean verifyWriter(String dataFilePath, long endOffset) throws FileNotFoundException, IOException {
-        RandomAccessFile raf = new RandomAccessFile(dataFilePath, "rw");
+    public Header getHeader(String filePath, long offset) throws FileNotFoundException, IOException {
+
+        RandomAccessFile raf = new RandomAccessFile(filePath, "rw");
         FileChannel fileChannel = raf.getChannel();
         ByteBuffer byteBuffer = ByteBuffer.allocate(16);
 
-        raf.seek(endOffset);
+        raf.seek(offset);
         fileChannel.read(byteBuffer);
-
-        System.out.println("bbget : " + byteBuffer.get(0));
         byteBuffer.rewind();
-        //head부터 4바이트 =개수 4바이트 =start 4바이트 =end
         int header = byteBuffer.getInt();
         int elementCount = byteBuffer.getInt();
-        int startIndex = byteBuffer.getInt();
-        int endIndex = byteBuffer.getInt();
-        System.out.println("end index : "+endIndex);
+        int startOffset = byteBuffer.getInt();
+        int endOffset = byteBuffer.getInt();
 
-        byteBuffer.clear();
-        ByteBuffer nbyteBuffer = ByteBuffer.allocate(1);
-        raf.seek(endIndex);
-        fileChannel.read(nbyteBuffer);
-        nbyteBuffer.rewind();
-        System.out.println("end buffer " +nbyteBuffer.get());
-        if (true/*file(endoffset)==null || ~~~*/) {
+        raf.close();
+        fileChannel.close();
+        return new Header(header, elementCount, startOffset, endOffset);
+    }
+
+    public boolean verifyWriter(String dataFilePath, long endOffset) throws FileNotFoundException, IOException {
+        Header header = getHeader(dataFilePath, endOffset);
+        RandomAccessFile raf = new RandomAccessFile(dataFilePath, "rw");
+        FileChannel fileChannel = raf.getChannel();
+        ByteBuffer byteBuffer = ByteBuffer.allocate(1);
+
+        raf.seek(header.getEndOffset()-1);
+        System.out.println("endoffset "+header.getEndOffset());
+        fileChannel.read(byteBuffer);
+        byteBuffer.rewind();
+        byte temp = byteBuffer.get();
+        raf.close();
+        fileChannel.close();
+        /* 0 == null, and 125 == '}' */
+        System.out.println("value of endOffset "+temp);
+        if (temp != 0) {
             return true;
         } else {
             return false;
@@ -146,26 +127,32 @@ public class PreprocessFileQueue {
     }
 
     private String getConsummeLogFilePath(int index) {
-        return consumeLogPath + FileQueueProperties.DATA_FILE_NAME + index + FileQueueProperties.DATA_FILE_SUFFIX;
+        return consumeLogPath + FileQueueProperties.CONSUME_FILE_NAME + index + FileQueueProperties.CONSUME_FILE_SUFFIX;
     }
 
     private String getDataFilePath(int index) {
         return dataPath + FileQueueProperties.DATA_FILE_NAME + index + FileQueueProperties.DATA_FILE_SUFFIX;
     }
 
+    //File 최대 사이즈를 unsigned int가 허용가능한 범위로 해야 에러가안난다 (int) 파싱할 경우 에러날 수 있다
     public int getHead() {
         try {
-            String dataFilePath = getDataFilePath(findLatestFileNumber(dataPath));
-            if (verifyWriter(dataFilePath, findLastHeader(dataFilePath))) {
-
-
+            int num = findLastFileNumber(dataPath);
+            String dataFilePath = getDataFilePath(num);
+            if (num == 0) {
+                // initial setting. create File and return start position 0.
+                File initialConsumeLogFile = new File(getDataFilePath(1));
+                initialConsumeLogFile.createNewFile();
+                return 0;
+            }
+            long lastOffset = findLatestHeader(dataFilePath);
+            Header header = getHeader(dataFilePath, lastOffset);
+            if (verifyWriter(dataFilePath, lastOffset)) {
+                return header.getEndOffset();
             } else {
+                return (int) lastOffset; //얘를 (int)로 바꾸는게아니라 비트연산으로 int로 바꾸자 utils
                 //endOffset부터 다시 head찾는 verify후  overwrite
             }
-
-            //1. 데이터 디렉토리의 가장 끝 파일을 읽는다.
-            //2. 마지막 줄을 가져온다  마지막줄의 첫 헤더를 어떻게 가져올까요
-            return 1;
         } catch (FileNotFoundException e) {
             e.printStackTrace();
             return 0;
@@ -175,35 +162,45 @@ public class PreprocessFileQueue {
         }
     }
 
+    /*
+        return ((buffer[offset] & 0xff) << 24)
+                + ((buffer[offset + 1] & 0xff) << 16)
+                + ((buffer[offset + 2] & 0xff) << 8)
+                + (buffer[offset + 3] & 0xff);*/
     //나중에 InputStream , OutputStream과  RandomAccess속도 비교
     public int getTail() {
-
         try {
-            int num = findLatestFileNumber(consumeLogPath);
-            System.out.println("Tail num : " + num);
+
+            int num = findLastFileNumber(consumeLogPath);
+            String consummeLogFilePath = getConsummeLogFilePath(num);
+            RandomAccessFile raf = new RandomAccessFile(consummeLogFilePath, "rw");
+            FileChannel fileChannel = raf.getChannel();
+            long fileLength=raf.length();
+            long CONSUMELOG_FIXEX_SIZE = 16;
             if (num == 0) {
                 // initial setting. create File and return start position 0.
-                File initialConsumeLogFile = new File(consumeLogPath + File.separator + FileQueueProperties.CONSUME_FILE_NAME + 1 + FileQueueProperties.CONSUME_FILE_SUFFIX);
-
+                File initialConsumeLogFile = new File(getConsummeLogFilePath(1));
                 initialConsumeLogFile.createNewFile();
+                raf.close();
+                fileChannel.close();
                 return 0;
             }
+            //깨진지 여부는 굳이 알 필요가 없다  나누기 연산을 하면  깨졌으면 이전것을 자동으로 찾아간다 거기다 다시 Length를 곱해주면 된다
 
+            ByteBuffer byteBuffer = ByteBuffer.allocate(16);
+            raf.seek((fileLength/CONSUMELOG_FIXEX_SIZE) * CONSUMELOG_FIXEX_SIZE);
+            fileChannel.read(byteBuffer);
+            Header header = new Header(byteBuffer.getInt(),byteBuffer.getInt(),byteBuffer.getInt(),byteBuffer.getInt());
 
-           /* String latestConsumeLogPath = consumeLogPath + File.separator + FileQueueProperties.CONSUME_FILE_NAME + num + FileQueueProperties.CONSUME_FILE_SUFFIX;
-            System.out.println("path : " + latestConsumeLogPath);
+            System.out.println("head : "+header.getHead());
+            System.out.println("number : "+header.getElementCount());
+            System.out.println("start : "+header.getStartOffset());
+            System.out.println("end : "+header.getEndOffset());
 
-            RandomAccessFile raf = new RandomAccessFile(latestConsumeLogPath, "rw");
+            raf.close();
+            fileChannel.close();
+            return header.getStartOffset();
 
-            FileChannel fileChannel = raf.getChannel();
-
-            ByteBuffer buf = ByteBuffer.allocate(48);
-
-            int bytesRead = fileChannel.read(buf);
-            System.out.println("dddd : " + bytesRead);
-            //ByteBuffer buf2 = ByteBuffer.allocate(1024);
-
-            //    buf2.clear();
 
 
             //1. 컨슘 로그 파일 연다  OK
@@ -226,7 +223,7 @@ public class PreprocessFileQueue {
 
 
     //컨슘로그 지울꺼면. 새로운 파일 만들어지고 거기에 한줄 일떄   이전꺼 지우면  한줄에서 꺠지면 이전꺼 못찾아온다
-    public int findLatestFileNumber(String path) {
+    public int findLastFileNumber(String path) {
         try {
             File dir = new File(path);
             File files[] = new File[0];
@@ -257,14 +254,6 @@ public class PreprocessFileQueue {
             logger.info("ArrayIndexOutOfBounds Exception. File Format is page-NUM.dat. Please Check your ConsumerLog Directory");
             return 0;
         }
-    }
-
-    private void findTailFile() {
-
-    }
-
-    private void findHeadFile() {
-
     }
 
     private void close() {

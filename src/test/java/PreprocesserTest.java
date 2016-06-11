@@ -2,7 +2,7 @@ import com.skplanet.filequeue.PreprocessFileQueue;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
-import properties.FileQueueProperties;
+import com.skplanet.properties.FileQueueProperties;
 
 /**
  * Created by byeongsukang on 2016. 6. 6..
@@ -18,14 +18,15 @@ public class PreprocesserTest {
 
     @Test
     public void testSplitter() {
-        int num = pre.findLatestFileNumber(FileQueueProperties.FILE_PATH+FileQueueProperties.PARENT_PATH+FileQueueProperties.CONSUME_LOG_PATH);
-        pre.getHead();
+       // int num = pre.findLastFileNumber(FileQueueProperties.FILE_PATH+FileQueueProperties.PARENT_PATH+FileQueueProperties.CONSUME_LOG_PATH);
+        System.out.println("getHead()"+pre.getHead());
+        System.out.println("getTail()"+pre.getTail());
     }
 
     @Ignore
     @Test
     public void testAppender() throws Exception{
-        pre.findLastHeader("/tmp/autogenous_path/data/page-1.dat");
+        pre.findLatestHeader("/tmp/autogenous_path/data/page-1.dat");
     }
 
 }
