@@ -16,8 +16,10 @@ import java.util.logging.Logger;
  * Created by byeongsukang on 2016. 6. 6..
  */
 public class PreprocessFileQueue {
-//    private final static int HEAD_DATA=1751474532;
-    private final static int HEAD_DATA=ByteBuffer.wrap(new byte[]{/*head*/0x68, 0x65, 0x61, 0x64}).getInt();
+    //    private final static int HEAD_DATA=1751474532;
+    private final static int HEAD_DATA = ByteBuffer.wrap(new byte[]{/*head*/0x68, 0x65, 0x61, 0x64}).getInt();
+
+    private final static long CONSUMELOG_FIXEX_SIZE = 16;
     private Logger logger = Logger.getLogger("AutogenousFileQueue");
     private String filePath;
     private String parentPath;
@@ -75,12 +77,11 @@ public class PreprocessFileQueue {
         long length = fileChannel.size();
         int readData = 0;
         while (HEAD_DATA != readData) {//여기서 돌려줘야한다
-            if(length==0)break;
+            if (length == 0) break;
             fileChannel.position(--length);
             fileChannel.read(byteBuffer);
             byteBuffer.rewind();
             readData = byteBuffer.getInt();
-            System.out.println("read data : "+readData+" , HEAD_DATA : "+HEAD_DATA);
             byteBuffer.clear();
         }
         return length;
@@ -94,13 +95,16 @@ public class PreprocessFileQueue {
         Header header = Utils.getHeader(fileChannel, endOffset);
         ByteBuffer byteBuffer = ByteBuffer.allocate(1);
 
-        fileChannel.position(header.getEndOffset()-1);
-        System.out.println("endoffset "+header.getEndOffset());
+        if (header.getEndOffset() == 0) {
+            return true;
+        }
+        fileChannel.position(header.getEndOffset() - 1);
+        System.out.println("endoffset " + header.getEndOffset());
         fileChannel.read(byteBuffer);
         byteBuffer.rewind();
         byte temp = byteBuffer.get();
         /* 0 == null, and 125 == '}' */
-        System.out.println("value of endOffset "+temp);
+        System.out.println("value of endOffset " + temp);
         if (temp != 0) {
             return true;
         } else {
@@ -120,6 +124,7 @@ public class PreprocessFileQueue {
 
     /**
      * get write offset after revision
+     *
      * @return
      */
     public Header getHead() {
@@ -130,17 +135,15 @@ public class PreprocessFileQueue {
                 // initial setting. create File and return start position 0.
                 File initialConsumeLogFile = new File(getDataFilePath(1));
                 initialConsumeLogFile.createNewFile();
-                return new Header(HEAD_DATA,0,0,0);
+                return new Header(HEAD_DATA, 0, 0, 0);
             }
             String dataFilePath = getDataFilePath(num);
-            RandomAccessFile raf = new RandomAccessFile(dataFilePath,"rw");
+            RandomAccessFile raf = new RandomAccessFile(dataFilePath, "rw");
             FileChannel fileChannel = raf.getChannel();
             long lastOffset = findLatestHeader(fileChannel);
             Header header = Utils.getHeader(fileChannel, lastOffset);
-            if (verifyWriter(fileChannel, lastOffset)) {
-
-            } else {
-                header.setEndOffset((int)lastOffset); //얘를 (int)로 바꾸는게아니라 비트연산으로 int로 바꾸자 utils
+            if (!verifyWriter(fileChannel, lastOffset)) {
+                header.setEndOffset((int) lastOffset); //얘를 (int)로 바꾸는게아니라 비트연산으로 int로 바꾸자 utils
                 //endOffset부터 다시 head찾는 verify후  overwrite
             }
 
@@ -160,9 +163,10 @@ public class PreprocessFileQueue {
 
     /**
      * get read offset after revision
+     *
      * @return
      */
-    public int getTail() {
+    public Header getTail() {
         try {
 
             int num = findLastFileNumber(consumeLogPath);
@@ -171,28 +175,47 @@ public class PreprocessFileQueue {
                 // initial setting. create File and return start position 0.
                 File initialConsumeLogFile = new File(getConsummeLogFilePath(1));
                 initialConsumeLogFile.createNewFile();
-                return 0;
+                return new Header(HEAD_DATA, 0, 0, 0);
             }
             String consummeLogFilePath = getConsummeLogFilePath(num);
             RandomAccessFile raf = new RandomAccessFile(consummeLogFilePath, "rw");
             FileChannel fileChannel = raf.getChannel();
-            long fileLength=raf.length();
-            long CONSUMELOG_FIXEX_SIZE = 16;
+            long fileLength = raf.length();
             //깨진지 여부는 굳이 알 필요가 없다  나누기 연산을 하면  깨졌으면 이전것을 자동으로 찾아간다 거기다 다시 Length를 곱해주면 된다
-
             ByteBuffer byteBuffer = ByteBuffer.allocate(16);
-            raf.seek((fileLength/CONSUMELOG_FIXEX_SIZE) * CONSUMELOG_FIXEX_SIZE);
-            fileChannel.read(byteBuffer);
-            Header header = new Header(byteBuffer.getInt(),byteBuffer.getInt(),byteBuffer.getInt(),byteBuffer.getInt());
 
-            System.out.println("head : "+header.getHead());
-            System.out.println("number : "+header.getElementCount());
-            System.out.println("start : "+header.getStartOffset());
-            System.out.println("end : "+header.getEndOffset());
+            if (fileLength == 0){
+                return new Header(HEAD_DATA, 0, 0, 0);
+            }
+                fileChannel.position(((fileLength / CONSUMELOG_FIXEX_SIZE) * CONSUMELOG_FIXEX_SIZE) - 16);
+            //이 다음놈의 data header를 가져온다
+            //이전놈의 consumerlog header를 가져온다.
+            fileChannel.read(byteBuffer);
+            byteBuffer.rewind();
+            Header header = new Header(byteBuffer.getInt(), byteBuffer.getInt(), byteBuffer.getInt(), byteBuffer.getInt());
+
+            //얘가 가지고 있는 엔드 오프셋에서 헤더를뽑아서 거기의 엔드 오프셋이 널인지를 체크해야합니다
+            /**
+             * 어떻게 할까 얘는.. 일단
+             */
+/*
+            RandomAccessFile dataRaf = new RandomAccessFile(getDataFilePath(findLastFileNumber(dataPath)), "rw");
+            FileChannel dataFileChannel = dataRaf.getChannel();
+            if(!verifyWriter(dataFileChannel,Utils.getHeader(dataFileChannel,header.getEndOffset()).getEndOffset())){
+                //어떻게 처리해야하지
+            }
+            //데이터 null인지 체크할까?*/
+
+            System.out.println("head : " + header.getHead());
+            System.out.println("number : " + header.getElementCount());
+            System.out.println("start : " + header.getStartOffset());
+            System.out.println("end : " + header.getEndOffset());
 
             raf.close();
             fileChannel.close();
-            return header.getStartOffset();
+
+
+            return header;
 
 //start end 데이터파일에 존재ㅐ하는지 확인한번 하고 리턴해야한다
 
@@ -204,14 +227,11 @@ public class PreprocessFileQueue {
             //6. overwrite or append로 진행
         } catch (FileNotFoundException e) {
             e.printStackTrace();
+            return null;
         } catch (IOException e) {
             e.printStackTrace();
+            return null;
         }
-        return 1;
-    }
-
-    private void recoverIndex() {
-
     }
 
 
@@ -219,6 +239,7 @@ public class PreprocessFileQueue {
 
     /**
      * get Last File Number in directory
+     *
      * @param path
      * @return
      */

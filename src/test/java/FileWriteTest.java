@@ -1,7 +1,7 @@
 import com.skplanet.element.Header;
 import com.skplanet.filequeue.AutogenousFileQueue;
-import com.skplanet.filequeue.PreprocessFileQueue;
 import com.skplanet.utils.Utils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -16,20 +16,29 @@ import java.nio.channels.FileChannel;
  * Created by byeongsukang on 2016. 6. 11..
  */
 public class FileWriteTest {
-    PreprocessFileQueue pre;
     AutogenousFileQueue afq;
     @Before
     public void init() {
-        pre = new PreprocessFileQueue();
         afq=AutogenousFileQueue.getInstance();
+    }
+    @After
+    public void close(){
+        afq.close();
     }
 
     @Test
     public void testFullWrite() {
-        for(int i =0 ; i<200;i++) {
-            afq.add("test log gogo~");
+        for(int i =0 ; i<10;i++) {
+            afq.add("{test log gogo~"+i+"}");
         }
     }
+    @Test
+    public void testFullRead() {
+        for(int i =0 ; i<9;i++) {
+            afq.remove();
+        }
+    }
+    @Ignore
     @Test
     public void testCrackedWrite(){
         //꺠진거 넣고 오프셋 보정되는지 확인해야한다
@@ -47,9 +56,7 @@ public class FileWriteTest {
         FileChannel fileChannel = raf.getChannel();
         ByteBuffer buf = ByteBuffer.allocate(16);
         buf.put(new byte[]{/*head*/0x68, 0x65, 0x61, 0x64,/*ElementCount*/ 0x00, 0x00, 0x00, 0x01,/*startOffset*/ 0x00, 0x00, 0x00, 0x00,/*endOffset*/ 0x00, 0x00, 0x00, 0x60});
-        //   ByteBuffer buf = ByteBuffer.wrap(new byte[]{'h','e','a','d',(byte)0x00,(byte)0x00,(byte)0x00,(byte)0xff,(byte)0x00,(byte)0x00,(byte)0xff,(byte)0xff});
         buf.flip();
-        //  raf.seek(0);
         fileChannel.write(buf);
 
         if (!("null".equals(data))) {
