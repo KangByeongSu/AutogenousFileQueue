@@ -9,7 +9,7 @@ public interface FileQueue {
      * Inserts the specified element into this queue if it is possible to do so immediately without violating capacity restrictions,
      * returning true upon success and throwing an IllegalStateException if no space is currently available.
      */
-    void add();
+    void add(String log);
 
     /**
      * Inserts the specified element into this queue if it is possible to do so immediately without violating capacity restrictions.

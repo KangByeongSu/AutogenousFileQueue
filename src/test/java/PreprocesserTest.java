@@ -23,10 +23,5 @@ public class PreprocesserTest {
         System.out.println("getTail()"+pre.getTail());
     }
 
-    @Ignore
-    @Test
-    public void testAppender() throws Exception{
-        pre.findLatestHeader("/tmp/autogenous_path/data/page-1.dat");
-    }
 
 }
